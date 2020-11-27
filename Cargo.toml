@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.34"
-hound = "3.4.0"
+hound = {git = "https://github.com/ruuda/hound.git", rev = "fa88d577f08370e915a5bb3af6b772de68c53e20"}
 realfft = "0.3.0"
 ron = "0.6.2"
 rustfft = "4.0.0"
 serde = "1.0.117"
-structopt = { version = "0.3.20", default-features = false }
+structopt = {version = "0.3.20", default-features = false}

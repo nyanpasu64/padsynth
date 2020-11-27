@@ -47,8 +47,7 @@ dependencies = [
 [[package]]
 name = "hound"
 version = "3.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a164bb2ceaeff4f42542bdb847c41517c78a60f5649671b2a07312b6e117549"
+source = "git+https://github.com/ruuda/hound.git?rev=fa88d577f08370e915a5bb3af6b772de68c53e20#fa88d577f08370e915a5bb3af6b772de68c53e20"
 
 [[package]]
 name = "lazy_static"
