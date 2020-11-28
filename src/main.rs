@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
-use std::fs::File;
+use serde::Deserialize;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::{fs::File, io::Read};
 use structopt::StructOpt;
 
 /// TODO fill this out
@@ -17,21 +18,48 @@ pub struct Opt {
     cfg: PathBuf,
 }
 
-fn main() -> Result<()> {
-    let opt = Opt::from_args();
+#[derive(Deserialize, Debug)]
+pub struct Arg {
+    test: String,
+}
 
-    let wav_error = || {
-        format!(
-            "cannot open WAV file '{}' specified in command line",
-            opt.wav.display(),
-        )
+fn main() -> Result<()> {
+    let opt: Opt = Opt::from_args();
+
+    let _wav_data = {
+        let wav_path = &opt.wav;
+        let wav_file = File::open(wav_path).with_context(|| {
+            format!(
+                "cannot open WAV file '{}' specified in command line",
+                wav_path.display(),
+            )
+        })?;
+        let mut buf_reader = BufReader::new(wav_file);
+
+        wav::read(&mut buf_reader)
+            .with_context(|| format!("reading WAV file '{}'", wav_path.display(),))?
     };
 
-    let file = File::open(&opt.wav).with_context(&wav_error)?;
-    let mut buf_reader = BufReader::new(file);
+    let cfg = {
+        let cfg_path = &opt.cfg;
+        let mut cfg_file = File::open(cfg_path).with_context(|| {
+            format!(
+                "cannot open config file '{}' specified in command line",
+                opt.cfg.display(),
+            )
+        })?;
 
-    let _wav_data = wav::read(&mut buf_reader).with_context(&wav_error)?;
-    // println!("{:?}", wav_data);
+        let mut cfg_bytes = Vec::new();
+        cfg_file
+            .read_to_end(&mut cfg_bytes)
+            .with_context(|| format!("reading config file '{}'", cfg_path.display()))?;
+        drop(cfg_file);
+
+        ron::de::from_bytes::<Arg>(&cfg_bytes)
+            .with_context(|| format!("parsing config file '{}'", cfg_path.display()))?
+    };
+
+    dbg!(cfg);
 
     Ok(())
 }
