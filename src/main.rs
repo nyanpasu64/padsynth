@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use serde::Deserialize;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::{fs::File, io::Read};
@@ -18,10 +17,7 @@ pub struct Opt {
     cfg: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct Arg {
-    test: String,
-}
+mod cfg;
 
 fn main() -> Result<()> {
     let opt: Opt = Opt::from_args();
@@ -55,7 +51,7 @@ fn main() -> Result<()> {
             .with_context(|| format!("reading config file '{}'", cfg_path.display()))?;
         drop(cfg_file);
 
-        ron::de::from_bytes::<Arg>(&cfg_bytes)
+        ron::de::from_bytes::<cfg::Config>(&cfg_bytes)
             .with_context(|| format!("parsing config file '{}'", cfg_path.display()))?
     };
 
