@@ -15,6 +15,10 @@ pub struct Opt {
     /// Configuration file for resynthesis
     #[structopt(name = "CONFIG", parse(from_os_str))]
     cfg: PathBuf,
+
+    /// Output file to write to
+    #[structopt(name = "OUT_WAV", parse(from_os_str))]
+    out_wav: PathBuf,
 }
 
 mod cfg;
