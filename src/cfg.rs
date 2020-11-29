@@ -9,6 +9,14 @@ pub struct Config {
 
 #[derive(Deserialize, Debug)]
 pub struct Input {
+    /// TODO If omitted, smpl chunk must be present, and will be used for loop begin.
+    loop_begin: u32,
+
+    /// Not included in loop.
+    /// If omitted, defaults to smpl chunk if present, otherwise end of sample.
+    #[serde(default)]
+    loop_end: Option<u32>,
+
     transpose: Transpose,
 
     /// Used to split the input signal up into bins.
