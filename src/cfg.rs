@@ -34,7 +34,8 @@ pub enum Pitch {
 pub struct Output {
     sample_rate: u32,
     duration: Duration,
-    // TODO formant_fund: Pitch,
+    // TODO mode: PreserveSpectrum | Harmonic{stdev} | PreserveFormants{stdev, fund_pitch}
+    // and remove harmonic_stdev
     harmonic_stdev: f32,
 
     #[serde(default)]
@@ -51,7 +52,6 @@ pub enum Duration {
 #[derive(Deserialize, Debug)]
 pub struct ChordNote {
     pitch: ChordPitch,
-    // TODO preserve_formants: bool, (only valid if harmonic_stdev is Some)
     volume: Volume,
 }
 
