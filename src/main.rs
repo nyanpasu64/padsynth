@@ -8,7 +8,7 @@ use wav::BitDepth;
 /// TODO fill this out
 #[derive(StructOpt, Debug)]
 #[structopt(name = "padsynth")]
-pub struct Opt {
+struct Opt {
     /// Audio file to resynthesize
     #[structopt(name = "WAV", parse(from_os_str))]
     wav: PathBuf,
