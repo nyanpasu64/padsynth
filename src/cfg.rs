@@ -32,7 +32,7 @@ pub struct Transpose {
     pub detune_cents: f32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 pub enum Pitch {
     Hz(f32),
     Midi(i32),
@@ -51,7 +51,7 @@ pub struct Output {
     pub chord: Vec<ChordNote>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 pub enum Duration {
     Smp(usize),
     TimeMs(f32),
@@ -63,14 +63,14 @@ pub struct ChordNote {
     pub volume: Volume,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 pub enum ChordPitch {
     // TODO Harmonic(f32), (only valid if harmonic_stdev is Some)
     Hz(u32),
     Midi(i32),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 pub enum Volume {
     Ampl(f32),
     Power(f32),
