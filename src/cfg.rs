@@ -10,12 +10,12 @@ pub struct Config {
 #[derive(Deserialize, Debug)]
 pub struct Input {
     /// TODO If omitted, smpl chunk must be present, and will be used for loop begin.
-    pub loop_begin: u32,
+    pub loop_begin: usize,
 
     /// Not included in loop.
     /// If omitted, defaults to smpl chunk if present, otherwise end of sample.
     #[serde(default)]
-    pub loop_end: Option<u32>,
+    pub loop_end: Option<usize>,
 
     pub transpose: Transpose,
 
@@ -53,7 +53,7 @@ pub struct Output {
 
 #[derive(Deserialize, Debug)]
 pub enum Duration {
-    Smp(u32),
+    Smp(usize),
     TimeMs(f32),
 }
 
