@@ -34,7 +34,7 @@ pub struct Transpose {
 
 #[derive(Deserialize, Debug)]
 pub enum Pitch {
-    Hz(u32),
+    Hz(f32),
     Midi(i32),
 }
 
