@@ -57,10 +57,24 @@ fn volume_to_ampl(volume: Volume) -> Amplitude {
     }
 }
 
-fn load_input(input: &cfg::Input, mut data: &[Amplitude]) -> Result<FftVec> {
+struct Spectrum<T> {
+    spectrum: T,
+
+    /// "period" is the number of samples fed into the FFT.
+    /// period/s is an unusual choice compared with sample/s,
+    /// but is the simplest way to convert from cycle/s (Hz)
+    /// to cycle/period (FFT frequency bins).
+    period_per_s: f32,
+}
+
+fn load_input(
+    in_cfg: &cfg::Input,
+    mut data: &[Amplitude],
+    wav_smp_per_s: u32,
+) -> Result<Spectrum<FftVec>> {
     // Trim the wav data to the looped portion.
-    let loop_begin = input.loop_begin;
-    let loop_end = input.loop_end.unwrap_or(data.len());
+    let loop_begin = in_cfg.loop_begin;
+    let loop_end = in_cfg.loop_end.unwrap_or(data.len());
     if !(loop_end > loop_begin) {
         bail!(
             "loop end = {} must be greater than loop begin {}",
@@ -75,20 +89,28 @@ fn load_input(input: &cfg::Input, mut data: &[Amplitude]) -> Result<FftVec> {
     // We cannot use realfft, because it assumes the input has even length
     // (which may not be true for arbitrary looped samples).
     // It is true for samples ripped from SNES games (multiple of 16).
-    let mut fft = realfft::RealToComplex::<f32>::new(loop_end - loop_begin).unwrap();
+    let mut fft = realfft::RealToComplex::<f32>::new(data.len()).unwrap();
     let mut data_copy = Vec::from(data);
     let mut spectrum = vec![FftSample::zero(); data.len() / 2 + 1];
     fft.process(&mut data_copy, &mut spectrum).unwrap();
-    Ok(spectrum)
+
+    let mut smp_per_s = in_cfg.transpose.sample_rate.unwrap_or(wav_smp_per_s) as f32;
+    smp_per_s *= cents_to_freq_mul(in_cfg.transpose.detune_cents);
+    let smp_per_period = data.len() as f32;
+
+    Ok(Spectrum {
+        spectrum,
+        period_per_s: smp_per_s / smp_per_period,
+    })
 }
 
-struct NoteSpectrum<T> {
+struct SpectrumAndNote<T> {
     spectrum: T,
-    sample_rate: f32,
-    pitch: f32,
+    period_per_s: f32,
+    cyc_per_s: f32,
 }
 
-fn synthesize(out_cfg: &cfg::Output, input: NoteSpectrum<&FftSlice>) -> Result<RealVec> {
+fn synthesize(out_cfg: &cfg::Output, input: SpectrumAndNote<&FftSlice>) -> Result<RealVec> {
     let out_nsamp = duration_to_samples(out_cfg.duration, out_cfg.sample_rate);
     let fund_freq: Option<f32> = match out_cfg.mode {
         // TODO if PreserveFormants(fund_pitch), return Some(pitch_to_freq(fund_pitch)).
@@ -101,8 +123,8 @@ fn synthesize(out_cfg: &cfg::Output, input: NoteSpectrum<&FftSlice>) -> Result<R
     /// For a given output note, generate all harmonics
     /// and add them one-by-one to the output spectrum.
     fn add_note(
-        input: &NoteSpectrum<&FftSlice>,
-        output: &NoteSpectrum<&mut FftSlice>,
+        input_note: &SpectrumAndNote<&FftSlice>,
+        output_note: &SpectrumAndNote<&mut FftSlice>,
         volume: f32,
         synth_mode: SynthMode,
         rng: &mut Random,
@@ -130,15 +152,18 @@ fn synthesize(out_cfg: &cfg::Output, input: NoteSpectrum<&FftSlice>) -> Result<R
 
     // Fill spectrum with each note.
     for note in &out_cfg.chord {
-        let pitch = chord_pitch_to_freq(note.pitch, fund_freq)?;
+        let cyc_per_s = chord_pitch_to_freq(note.pitch, fund_freq)?;
         let volume = volume_to_ampl(note.volume);
+
+        let out_smp_per_s = out_cfg.sample_rate as f32;
+        let out_smp_per_period = out_nsamp as f32;
 
         add_note(
             &input,
-            &NoteSpectrum {
+            &SpectrumAndNote {
                 spectrum: &mut out_spectrum,
-                sample_rate: out_cfg.sample_rate as f32,
-                pitch,
+                period_per_s: out_smp_per_s / out_smp_per_period,
+                cyc_per_s,
             },
             volume,
             out_cfg.mode,
@@ -157,21 +182,18 @@ fn synthesize(out_cfg: &cfg::Output, input: NoteSpectrum<&FftSlice>) -> Result<R
 /// `data` represents the entire wav file, downmixed to mono,
 /// but not yet trimmed to the looped section only.
 ///
-pub fn process(cfg: &Config, data: &[Amplitude], orig_sample_rate: u32) -> Result<RealVec> {
-    let input = &cfg.input;
+pub fn process(cfg: &Config, data: &[Amplitude], wav_smp_per_s: u32) -> Result<RealVec> {
+    let in_cfg = &cfg.input;
 
-    let mut sample_rate = input.transpose.sample_rate.unwrap_or(orig_sample_rate) as f32;
-    sample_rate *= cents_to_freq_mul(input.transpose.detune_cents);
-    let pitch = pitch_to_freq(input.pitch);
-
-    let spectrum = load_input(&cfg.input, data)?;
+    let spectrum = load_input(&cfg.input, data, wav_smp_per_s)?;
+    let freq = pitch_to_freq(in_cfg.pitch);
 
     let out = synthesize(
         &cfg.output,
-        NoteSpectrum {
-            spectrum: &spectrum,
-            sample_rate,
-            pitch,
+        SpectrumAndNote {
+            spectrum: &spectrum.spectrum,
+            period_per_s: spectrum.period_per_s,
+            cyc_per_s: freq,
         },
     )?;
     Ok(out)
