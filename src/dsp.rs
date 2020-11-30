@@ -1,5 +1,17 @@
+use anyhow::{bail, Result};
+
+use crate::cfg;
 use crate::cfg::Config;
 use crate::{cfg::Pitch, common::Amplitude};
+
+use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
+
+type RealVec = Vec<f32>;
+
+type FftSample = Complex<f32>;
+type FftVec = Vec<FftSample>;
+type FftSlice = [FftSample];
 
 fn cents_to_freq_mul(cents: f32) -> f32 {
     2.0f32.powf(cents / 1200.0)
@@ -21,21 +33,39 @@ fn pitch_to_freq(pitch: Pitch) -> f32 {
 /// `data` represents the entire wav file, downmixed to mono,
 /// but not yet trimmed to the looped section only.
 ///
-pub fn process(cfg: &Config, mut data: &[Amplitude], orig_sample_rate: u32) -> Vec<Amplitude> {
+pub fn process(cfg: &Config, data: &[Amplitude], orig_sample_rate: u32) -> Result<Vec<Amplitude>> {
     let input = &cfg.input;
-
-    // Trim the wav data to the looped portion.
-    let loop_begin = input.loop_begin;
-    let loop_end = input.loop_end.unwrap_or(data.len());
-    data = &data[loop_begin..loop_end];
 
     let mut sample_rate = input.transpose.sample_rate.unwrap_or(orig_sample_rate) as f32;
     sample_rate *= cents_to_freq_mul(input.transpose.detune_cents);
     let pitch = pitch_to_freq(input.pitch);
 
-    // Take the FFT of the looped portion.
-    // We cannot use realfft, because it assumes the input has even length
-    // (which may not be true for arbitrary looped samples).
-    // It is true for samples ripped from SNES games (multiple of 16).
-    unimplemented!()
+    fn load_input(input: &cfg::Input, mut data: &[Amplitude]) -> Result<FftVec> {
+        // Trim the wav data to the looped portion.
+        let loop_begin = input.loop_begin;
+        let loop_end = input.loop_end.unwrap_or(data.len());
+        if !(loop_end > loop_begin) {
+            bail!(
+                "loop end = {} must be greater than loop begin {}",
+                loop_end,
+                loop_begin
+            );
+        }
+
+        data = &data[loop_begin..loop_end];
+
+        // Take the FFT of the looped portion.
+        // We cannot use realfft, because it assumes the input has even length
+        // (which may not be true for arbitrary looped samples).
+        // It is true for samples ripped from SNES games (multiple of 16).
+        let mut fft = realfft::RealToComplex::<f32>::new(loop_end - loop_begin).unwrap();
+        let mut data_copy = Vec::from(data);
+        let mut spectrum = vec![FftSample::zero(); data.len() / 2 + 1];
+        fft.process(&mut data_copy, &mut spectrum).unwrap();
+        Ok(spectrum)
+    }
+
+    let spectrum = load_input(&cfg.input, data)?;
+
+    Ok(vec![])
 }
