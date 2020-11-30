@@ -42,13 +42,21 @@ pub enum Pitch {
 pub struct Output {
     pub sample_rate: u32,
     pub duration: Duration,
-    // TODO mode: PreserveSpectrum | Harmonic{stdev} | PreserveFormants{stdev, fund_pitch}
-    // and remove harmonic_stdev
-    pub harmonic_stdev: f32,
+    pub mode: SynthMode,
 
     #[serde(default)]
     pub master_volume: Volume,
     pub chord: Vec<ChordNote>,
+
+    #[serde(default)]
+    pub seed: u64,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy)]
+pub enum SynthMode {
+    // TODO PreserveSpectrum,
+    Harmonic { stdev: f32 },
+    // TODO PreserveFormants { stdev: f32, fund_pitch: Pitch },
 }
 
 #[derive(Deserialize, Debug, Clone, Copy)]
@@ -66,7 +74,7 @@ pub struct ChordNote {
 #[derive(Deserialize, Debug, Clone, Copy)]
 pub enum ChordPitch {
     // TODO Harmonic(f32), (only valid if harmonic_stdev is Some)
-    Hz(u32),
+    Hz(f32),
     Midi(i32),
 }
 
