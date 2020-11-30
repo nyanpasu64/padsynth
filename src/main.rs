@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use wav::BitDepth;
@@ -58,6 +58,18 @@ fn wav_to_float(wav: BitDepth) -> Vec<Amplitude> {
     }
 }
 
+fn float_to_i16(data: &[Amplitude]) -> Result<Vec<i16>> {
+    let mut out = vec![0i16; data.len()];
+    for (f, i) in data.iter().zip(&mut out) {
+        let f = (f * (1 << 15) as f32).round();
+        *i = f as i16;
+        if *i as f32 != f {
+            bail!("Error, clipping detected when writing WAV file");
+        }
+    }
+    Ok(out)
+}
+
 fn downmix_wav(header: &wav::Header, data: Vec<Amplitude>) -> Vec<Amplitude> {
     let nchan = header.channel_count as usize;
     assert!(nchan >= 1);
@@ -89,6 +101,8 @@ fn main() -> Result<()> {
         (header, wav_to_float(data))
     };
 
+    let data = downmix_wav(&header, data);
+
     let cfg = {
         let cfg_path = &opt.cfg;
         let mut cfg_file = File::open(cfg_path).with_context(|| {
@@ -110,11 +124,32 @@ fn main() -> Result<()> {
     };
     cfg.validate()?;
 
-    let data = downmix_wav(&header, data);
+    let out_data = dsp::process(&cfg, &data, header.sampling_rate)?;
 
-    let out_data = dsp::process(&cfg, &data, header.sampling_rate);
+    let out_wav_data = float_to_i16(&out_data)?;
+    drop(out_data);
 
-    // TODO write to wav
+    {
+        let out_wav_path = &opt.out_wav;
+        let out_file = File::create(out_wav_path)?;
+        let mut buf_writer = BufWriter::new(out_file);
+        wav::write(
+            wav::Header::new(
+                1, // audio format = PCM
+                1, // channel count = 1
+                cfg.output.sample_rate,
+                16, // bits/sample
+            ),
+            BitDepth::Sixteen(out_wav_data),
+            &mut buf_writer,
+        )
+        .with_context(|| format!("writing WAV file '{}'", out_wav_path.display()))?;
+
+        use std::io::Write;
+        buf_writer
+            .flush()
+            .with_context(|| format!("flushing output WAV file '{}'", out_wav_path.display()))?;
+    }
 
     Ok(())
 }
