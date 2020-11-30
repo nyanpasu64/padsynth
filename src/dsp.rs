@@ -94,10 +94,18 @@ fn load_input(
     // (which may not be true for arbitrary looped samples).
     // It is true for samples ripped from SNES games (multiple of 16).
     let mut fft = realfft::RealToComplex::<f32>::new(data.len()).unwrap();
-    let mut data_copy = Vec::from(data);
-    let mut spectrum = vec![FftAmplitude::zero(); data.len() / 2 + 1];
-    fft.process(&mut data_copy, &mut spectrum).unwrap();
-    // TODO divide by length
+
+    let mut spectrum = {
+        let mut data_copy = Vec::from(data);
+        let mut spectrum = vec![FftAmplitude::zero(); data.len() / 2 + 1];
+        fft.process(&mut data_copy, &mut spectrum).unwrap();
+        spectrum
+    };
+
+    // Normalize spectrum to have constant total power if input is resampled to a different length.
+    for ampl in &mut spectrum {
+        *ampl /= data.len() as f32;
+    }
 
     let mut smp_per_s = in_cfg.transpose.sample_rate.unwrap_or(wav_smp_per_s) as f32;
     smp_per_s *= cents_to_freq_mul(in_cfg.transpose.detune_cents);
