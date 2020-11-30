@@ -106,6 +106,7 @@ fn main() -> Result<()> {
         ron::de::from_bytes::<cfg::Config>(&cfg_bytes)
             .with_context(|| format!("parsing config file '{}'", cfg_path.display()))?
     };
+    cfg.validate()?;
 
     let data = downmix_wav(&header, data);
 

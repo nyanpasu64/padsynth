@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use serde::Deserialize;
 
 /// File config struct.
@@ -5,6 +6,20 @@ use serde::Deserialize;
 pub struct Config {
     pub input: Input,
     pub output: Output,
+}
+
+impl Config {
+    pub fn validate(&self) -> Result<()> {
+        // TODO use https://github.com/Keats/validator
+        match self.output.mode {
+            SynthMode::Harmonic { stdev } => {
+                if stdev <= 0.0 {
+                    bail!("invalid config file: output mode Harmonic stdev must be greater than 0, is {}", stdev);
+                }
+            } // _ => {}
+        }
+        Ok(())
+    }
 }
 
 #[derive(Deserialize, Debug)]
