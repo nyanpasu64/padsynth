@@ -360,6 +360,12 @@ fn synthesize(out_cfg: &cfg::Output, input_note: SpectrumAndNote<&FftSlice>) -> 
         }
     }
 
+    // ComplexToReal produces half the expected output amplitude.
+    // Double all coefficients to compensate.
+    for c in &mut out_spectrum {
+        *c *= 2.0;
+    }
+
     let mut fft = realfft::ComplexToReal::<f32>::new(out_nsamp).unwrap();
     let mut out_data = vec![0f32; out_nsamp];
     fft.process(&mut out_spectrum, &mut out_data).unwrap();
