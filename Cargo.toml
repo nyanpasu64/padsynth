@@ -9,6 +9,8 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.34"
 rand = "0.7.3"
+rand_distr = "0.3.0"
+rand_pcg = "0.2.1"
 realfft = "0.3.0"
 ron = "0.6.2"
 rustfft = "4.0.0"
