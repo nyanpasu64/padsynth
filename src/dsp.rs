@@ -1,3 +1,7 @@
+//! Note: "foo__bar" variable names indicate "foo/bar" unit ratios.
+//! Unfortunately Rust does not allow slashes, or Unicode characters, in variable names,
+//! and "foo_per_bar" is sometimes too verbose and long.
+
 use anyhow::{bail, Result};
 use cfg::{ChordPitch, Duration, Volume};
 
@@ -93,6 +97,7 @@ fn load_input(
     let mut data_copy = Vec::from(data);
     let mut spectrum = vec![FftAmplitude::zero(); data.len() / 2 + 1];
     fft.process(&mut data_copy, &mut spectrum).unwrap();
+    // TODO divide by length
 
     let mut smp_per_s = in_cfg.transpose.sample_rate.unwrap_or(wav_smp_per_s) as f32;
     smp_per_s *= cents_to_freq_mul(in_cfg.transpose.detune_cents);
@@ -109,41 +114,96 @@ struct SpectrumAndNote<T> {
     period_per_s: f32,
     cyc_per_s: f32,
 }
+// &Spectrum<&mut FftSlice> is just sad...
+// It's possible to add a "clone-borrow" method (https://gist.github.com/nyanpasu64/285ed17bb8787cf6821e900085c5c38b),
+// but this type is 16 bytes, so stack references may be faster than cloning (IDK).
 
-fn synthesize(out_cfg: &cfg::Output, input: SpectrumAndNote<&FftSlice>) -> Result<RealVec> {
+type Random = (); // TODO pick random library
+
+/// Adds power to FFT bins around a specific harmonic (of a note),
+/// using a windowed Gaussian curve to distribute power among bins.
+///
+/// The width of the Gaussian curve is proportional to `stdev_rel * freq`.
+/// For a fixed value of stdev_rel, higher harmonics have a wider peak.
+/// This models real-life detuned ensembles where for a given instrument detune,
+/// each harmonic's frequency deviation is proportional to the harmonic's pitch.
+///
+/// Only used by SynthMode::Harmonic and PreserveFormants.
+/// SynthMode::PreserveSpectrum samples an interpolator over the entire input spectrum,
+/// instead of summing the power of input bins into evenly-spaced harmonics
+/// and parametrically (stdev_rel) recreating each harmonic's frequency spread.
+fn add_harmonic(
+    spectrum: &Spectrum<&mut FftSlice>,
+    smp_per_s: f32,
+    freq: f32,
+    stdev_rel: f32,
+    volume: f32,
+    rng: &mut Random,
+) {
+}
+
+/// For a given output note, generate all harmonics
+/// and add them one-by-one to the output spectrum.
+/// Only used when mode is SynthMode::Harmonic.
+fn add_note_direct(
+    harmonic_amplitudes: &[Amplitude],
+    output_note: &SpectrumAndNote<&mut FftSlice>,
+    volume: f32,
+    rng: &mut Random,
+) {
+    // Loosely based on https://zynaddsubfx.sourceforge.io/doc/PADsynth/PADsynth.htm.
+
+    // TODO: For each harmonic:
+    // - Compute parameters for a Gaussian harmonic
+    // - The value will be negligible outside a [minimum..maximum) window
+    // - Produce a Vec<complex> where 0..n maps to minimum..maximum
+    // - For each entry, write a spectral component with fixed magnitude and random phase
+    //   (or a random Gaussian 2D vector, idk)
+    // - Divide all entries in the Vec by entries.norm.^2.sum.sqrt
+    // - Multiply by power of band in input.
+    //
+    // TODO "power of complex slice" function
+}
+
+/// Extracts the power of each harmonic,
+/// and takes the square root to find the equivalent amplitude.
+fn note_to_harmonics(input_note: &SpectrumAndNote<&FftSlice>) -> Vec<Amplitude> {
+    // FFT bins are "cyc/period".
+    let cyc_per_period = input_note.cyc_per_s / input_note.period_per_s;
+
+    // ceil() is used to convert floating-point bin indices into half-open range endpoints.
+    let harmonic_to_fft_bin = |h: f32| (h * cyc_per_period).ceil() as usize;
+
+    let mut output: Vec<Amplitude> = vec![];
+
+    let spectrum: &[FftAmplitude] = input_note.spectrum;
+    for harmonic in 1.. {
+        let bottom_bin = harmonic_to_fft_bin(harmonic as f32 - 0.5);
+        if bottom_bin >= spectrum.len() {
+            break;
+        }
+
+        let mut top_bin = harmonic_to_fft_bin((harmonic + 1) as f32 - 0.5);
+        top_bin = top_bin.min(spectrum.len());
+
+        let harmonic_range = &spectrum[bottom_bin..top_bin];
+        let total_power = harmonic_range
+            .iter()
+            .map(|c| c.norm_sqr())
+            .sum::<Amplitude>();
+        let total_amplitude = total_power.sqrt();
+        output.push(total_amplitude);
+    }
+
+    output
+}
+
+fn synthesize(out_cfg: &cfg::Output, input_note: SpectrumAndNote<&FftSlice>) -> Result<RealVec> {
     let out_nsamp = duration_to_samples(out_cfg.duration, out_cfg.sample_rate);
     let fund_freq: Option<f32> = match out_cfg.mode {
         // TODO if PreserveFormants(fund_pitch), return Some(pitch_to_freq(fund_pitch)).
         _ => None,
     };
-
-    use cfg::SynthMode;
-    type Random = (); // TODO pick random library
-
-    /// For a given output note, generate all harmonics
-    /// and add them one-by-one to the output spectrum.
-    fn add_note(
-        input_note: &SpectrumAndNote<&FftSlice>,
-        output_note: &SpectrumAndNote<&mut FftSlice>,
-        volume: f32,
-        synth_mode: SynthMode,
-        rng: &mut Random,
-    ) {
-        // Loosely based on https://zynaddsubfx.sourceforge.io/doc/PADsynth/PADsynth.htm.
-
-        // TODO: For SynthMode::Harmonic:
-        // Compute power of each input harmonic.
-        // For each harmonic:
-        // - Compute parameters for a Gaussian harmonic
-        // - The value will be negligible outside a [minimum..maximum) window
-        // - Produce a Vec<complex> where 0..n maps to minimum..maximum
-        // - For each entry, write a spectral component with fixed magnitude and random phase
-        //   (or a random Gaussian 2D vector, idk)
-        // - Divide all entries in the Vec by entries.norm.^2.sum.sqrt
-        // - Multiply by power of band in input.
-        //
-        // TODO "power of complex slice" function
-    }
 
     let mut rng = Random::default();
 
@@ -158,17 +218,22 @@ fn synthesize(out_cfg: &cfg::Output, input: SpectrumAndNote<&FftSlice>) -> Resul
         let out_smp_per_s = out_cfg.sample_rate as f32;
         let out_smp_per_period = out_nsamp as f32;
 
-        add_note(
-            &input,
-            &SpectrumAndNote {
-                spectrum: &mut out_spectrum,
-                period_per_s: out_smp_per_s / out_smp_per_period,
-                cyc_per_s,
-            },
-            volume,
-            out_cfg.mode,
-            &mut rng,
-        );
+        use cfg::SynthMode;
+        match out_cfg.mode {
+            SynthMode::Harmonic { .. } => {
+                let harmonic_amplitudes = note_to_harmonics(&input_note);
+                add_note_direct(
+                    &harmonic_amplitudes,
+                    &SpectrumAndNote {
+                        spectrum: &mut out_spectrum,
+                        period_per_s: out_smp_per_s / out_smp_per_period,
+                        cyc_per_s,
+                    },
+                    volume,
+                    &mut rng,
+                );
+            }
+        }
     }
 
     let mut fft = realfft::ComplexToReal::<f32>::new(out_nsamp).unwrap();
