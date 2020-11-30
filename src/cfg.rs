@@ -61,6 +61,8 @@ pub struct Output {
 
     #[serde(default)]
     pub master_volume: Volume,
+    #[serde(default)]
+    pub random_amplitudes: bool,
     pub chord: Vec<ChordNote>,
 
     #[serde(default)]
