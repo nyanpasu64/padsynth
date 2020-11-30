@@ -10,9 +10,9 @@ use rustfft::num_traits::Zero;
 
 type RealVec = Vec<f32>;
 
-type FftSample = Complex<f32>;
-type FftVec = Vec<FftSample>;
-type FftSlice = [FftSample];
+type FftAmplitude = Complex<f32>;
+type FftVec = Vec<FftAmplitude>;
+type FftSlice = [FftAmplitude];
 
 fn cents_to_freq_mul(cents: f32) -> f32 {
     2.0f32.powf(cents / 1200.0)
@@ -91,7 +91,7 @@ fn load_input(
     // It is true for samples ripped from SNES games (multiple of 16).
     let mut fft = realfft::RealToComplex::<f32>::new(data.len()).unwrap();
     let mut data_copy = Vec::from(data);
-    let mut spectrum = vec![FftSample::zero(); data.len() / 2 + 1];
+    let mut spectrum = vec![FftAmplitude::zero(); data.len() / 2 + 1];
     fft.process(&mut data_copy, &mut spectrum).unwrap();
 
     let mut smp_per_s = in_cfg.transpose.sample_rate.unwrap_or(wav_smp_per_s) as f32;
@@ -148,7 +148,7 @@ fn synthesize(out_cfg: &cfg::Output, input: SpectrumAndNote<&FftSlice>) -> Resul
     let mut rng = Random::default();
 
     // Initialize spectrum to all zeros.
-    let mut out_spectrum = vec![FftSample::zero(); out_nsamp / 2 + 1];
+    let mut out_spectrum = vec![FftAmplitude::zero(); out_nsamp / 2 + 1];
 
     // Fill spectrum with each note.
     for note in &out_cfg.chord {
