@@ -105,10 +105,8 @@ fn load_input(
     data = &data[loop_begin..loop_end];
 
     // Take the FFT of the looped portion.
-    // We cannot use realfft, because it assumes the input has even length
-    // (which may not be true for arbitrary looped samples).
-    // It is true for samples ripped from SNES games (multiple of 16).
-    let mut fft = realfft::RealToComplex::<f32>::new(data.len()).unwrap();
+    let mut planner = realfft::RealFftPlanner::<f32>::new();
+    let fft = planner.plan_fft_forward(data.len());
 
     let mut spectrum = {
         let mut data_copy = Vec::from(data);
@@ -360,13 +358,8 @@ fn synthesize(out_cfg: &cfg::Output, input_note: SpectrumAndNote<&FftSlice>) -> 
         }
     }
 
-    // ComplexToReal produces half the expected output amplitude.
-    // Double all coefficients to compensate.
-    for c in &mut out_spectrum {
-        *c *= 2.0;
-    }
-
-    let mut fft = realfft::ComplexToReal::<f32>::new(out_nsamp).unwrap();
+    let mut planner = realfft::RealFftPlanner::<f32>::new();
+    let fft = planner.plan_fft_inverse(out_nsamp);
     let mut out_data = vec![0f32; out_nsamp];
     fft.process(&mut out_spectrum, &mut out_data).unwrap();
     Ok(out_data)

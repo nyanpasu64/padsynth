@@ -52,6 +52,7 @@ fn wav_to_float(wav: BitDepth) -> Vec<Amplitude> {
             .into_iter()
             .map(|a: i32| a as Amplitude / (1 << 23) as Amplitude)
             .collect(),
+        BitDepth::ThirtyTwoFloat(v) => v,
         BitDepth::Empty => {
             unreachable!("wav::read() never returns Ok(BitDepth::Empty) but Err instead")
         }
@@ -140,7 +141,7 @@ fn main() -> Result<()> {
                 cfg.output.sample_rate,
                 16, // bits/sample
             ),
-            BitDepth::Sixteen(out_wav_data),
+            &BitDepth::Sixteen(out_wav_data),
             &mut buf_writer,
         )
         .with_context(|| format!("writing WAV file '{}'", out_wav_path.display()))?;
