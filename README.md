@@ -1,16 +1,20 @@
-```
-USAGE:
-    padsynth <WAV> <CONFIG> <OUT_WAV>
+Installation:
 
-ARGS:
-    <WAV>        Audio file to resynthesize
-    <CONFIG>     Configuration file for resynthesis
-    <OUT_WAV>    Output file to write to
+```sh
+cargo install --git https://github.com/nyanpasu64/padsynth.git
+# If you cloned the repo:
+cargo install --path .
 ```
 
-CONFIG = `name.pad-cfg` (see `src/cfg.rs`):
+Usage: `padsynth <WAV> <CONFIG> <OUT_WAV>`
 
-```ron
+- `<WAV>        Audio file to resynthesize`
+- `<CONFIG>     Configuration file for resynthesis`
+- `<OUT_WAV>    Output file to write to`
+
+`CONFIG` files are in [RON format](https://docs.rs/ron/latest/ron/), and are conventionally named `name.pad-cfg`. For the schema, see `src/cfg.rs`. Example:
+
+```rust
 (
     input: (
         loop_begin: 48,
