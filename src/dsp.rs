@@ -313,6 +313,8 @@ fn note_to_harmonics(input_note: &SpectrumAndNote<&FftSlice>) -> Vec<Amplitude> 
 }
 
 fn synthesize(out_cfg: &cfg::Output, input_note: SpectrumAndNote<&FftSlice>) -> Result<RealVec> {
+    use realfft::num_complex::ComplexFloat;
+
     // Setup state based on out_cfg.
     let out_nsamp = duration_to_samples(out_cfg.duration, out_cfg.sample_rate);
     let fund_freq: Option<f32> = match out_cfg.mode {
@@ -356,6 +358,11 @@ fn synthesize(out_cfg: &cfg::Output, input_note: SpectrumAndNote<&FftSlice>) -> 
                 );
             }
         }
+    }
+
+    if out_nsamp % 2 == 0 {
+        let nyquist: &mut FftAmplitude = out_spectrum.last_mut().unwrap();
+        *nyquist = FftAmplitude::new(nyquist.abs().copysign(nyquist.re()), 0.);
     }
 
     let mut planner = realfft::RealFftPlanner::<f32>::new();
